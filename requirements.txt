@@ -1,4 +1,5 @@
 mlflow[genai]
+agno
+python-dotenv
 langgraph
 langchain-google-genai
-python-dotenv

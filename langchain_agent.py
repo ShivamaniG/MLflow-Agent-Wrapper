@@ -6,14 +6,12 @@ from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, StateGraph
-from mlflow.genai.agent_server import invoke
-from mlflow.types.responses import ResponsesAgentRequest, ResponsesAgentResponse
 
 
 load_dotenv()
 
 mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"))
-mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT", "Test"))
+mlflow.set_experiment("langchain")
 mlflow.langchain.autolog()
 
 
@@ -37,18 +35,19 @@ def _build_llm() -> ChatGoogleGenerativeAI:
 
 def _careplan_node(state: AgentState) -> AgentState:
     llm = _build_llm()
+    prompt = mlflow.genai.load_prompt("prompts:/v1/2")
+    prompt_text = getattr(prompt, "template", str(prompt))
 
-    system = SystemMessage(
-        content=(
-            "You are a medical assistant. Return exactly one short line care plan. "
-            "No bullets. No disclaimer."
-        )
+    response = llm.invoke(
+        [
+            SystemMessage(content=prompt_text),
+            HumanMessage(content=state["question"]),
+        ]
     )
-    user = HumanMessage(content=state["question"])
-    response = llm.invoke([system, user])
 
     state["careplan"] = str(response.content).strip().replace("\n", " ")
     return state
+
 
 
 workflow = StateGraph(AgentState)
@@ -61,24 +60,6 @@ medical_graph = workflow.compile()
 def run_medical_agent(question: str) -> str:
     result = medical_graph.invoke({"question": question, "careplan": ""})
     return result["careplan"]
-
-
-@invoke()
-async def non_streaming(request: ResponsesAgentRequest) -> ResponsesAgentResponse:
-    question = ""
-    for item in request.input:
-        payload = item.model_dump() if hasattr(item, "model_dump") else item
-        if isinstance(payload, dict):
-            content = payload.get("content")
-            if isinstance(content, str) and content.strip():
-                question = content.strip()
-                break
-
-    if not question:
-        return ResponsesAgentResponse(custom_outputs={"careplan": "Missing user question."}, output=[])
-
-    careplan = run_medical_agent(question)
-    return ResponsesAgentResponse(custom_outputs={"careplan": careplan}, output=[])
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-import agent
+import multi_agent
 from mlflow.genai.agent_server import AgentServer
 
 agent_server = AgentServer("ResponsesAgent")

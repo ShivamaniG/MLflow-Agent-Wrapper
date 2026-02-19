@@ -1,42 +1,44 @@
-﻿# MLflow Medical Agent Wrapper - Version 1
+# MLflow Medical Agent Wrapper - Version 1
 
 ## What this is
-A minimal MLflow Agent Server wrapper around a LangGraph medical agent.
+A minimal MLflow Agent Server wrapper with **two Gemini agents** behind one `/invocations` endpoint:
+- `agno` agent (`agno_agent.py`)
+- `langchain` (LangGraph) agent (`langchain_agent.py`)
 
-- Input: user medical question
-- Output: one-line care plan
-- Model path: Gemini via MLflow AI Gateway
+Both call Gemini via MLflow AI Gateway and return one concise care-plan line.
 
 ## Why use this
-- Exposes your agent as an HTTP API (`/invocations`)
-- Keeps model/provider details behind MLflow Gateway
-- Adds MLflow tracing compatibility for observability
+- Single API endpoint for multiple agent frameworks
+- Gateway-based model access (no direct provider SDK calls in request layer)
+- MLflow autologging enabled for each framework:
+  - `mlflow.agno.autolog()` in Agno agent
+  - `mlflow.langchain.autolog()` in LangGraph agent
+- Separate experiments:
+  - Agno agent logs to experiment `agno`
+  - LangGraph agent logs to experiment `langchain`
 
 ## Project files
-- `agent.py`: LangGraph agent + `@invoke()` handler
+- `agno_agent.py`: Agno medical agent logic
+- `langchain_agent.py`: LangGraph medical agent logic
+- `multi_agent.py`: single `@invoke()` router for both agents
 - `start_server.py`: starts MLflow `AgentServer`
 - `.env`: runtime configuration
+- `.env.example`: sample configuration
 - `requirements.txt`: dependencies
 
-## Prerequisites
-- Python 3.10+
-- MLflow server running at `http://localhost:5000`
-- A Gemini endpoint configured in MLflow AI Gateway
-
 ## Environment config
-Set `.env`:
+Set `.env` (or copy from `.env.example`):
 
 ```env
 AI_GATEWAY_BASE_URL=http://localhost:5000/gateway/gemini
-AI_GATEWAY_GEMINI_ENDPOINT=Test_Endpoint
+AI_GATEWAY_GEMINI_ENDPOINT=Gemini_Endpoint
 AI_GATEWAY_API_KEY=dummy
 MLFLOW_TRACKING_URI=http://localhost:5000
-MLFLOW_EXPERIMENT=Test
 ```
 
 Notes:
-- `AI_GATEWAY_GEMINI_ENDPOINT` must exactly match your MLflow Gateway endpoint name.
-- Keep `AI_GATEWAY_API_KEY=dummy` only if your gateway does not enforce auth.
+- `AI_GATEWAY_GEMINI_ENDPOINT` must match your MLflow Gateway endpoint name exactly.
+- `AI_GATEWAY_API_KEY=dummy` is fine if your local gateway does not enforce auth.
 
 ## Install
 ```bash
@@ -54,21 +56,36 @@ mlflow server --host 127.0.0.1 --port 5000
 python start_server.py
 ```
 
-## Test API
+## API usage
+Use `custom_inputs.agent_name` to choose agent.
+
+### Call Agno agent
 ```bash
-curl -X POST http://localhost:8000/invocations \
-  -H "Content-Type: application/json" \
-  -d '{"input":[{"role":"user","content":"Adult with mild fever and sore throat for 2 days"}]}'
+curl -X POST http://localhost:8000/invocations   -H "Content-Type: application/json"   -d '{
+    "input": [{"role":"user","content":"I want to improve heart health"}],
+    "custom_inputs": {"agent_name":"agno"}
+  }'
 ```
 
-Expected shape:
+### Call LangGraph agent
+```bash
+curl -X POST http://localhost:8000/invocations   -H "Content-Type: application/json"   -d '{
+    "input": [{"role":"user","content":"I want to improve heart health"}],
+    "custom_inputs": {"agent_name":"langchain"}
+  }'
+```
+
+## Response shape
 ```json
 {
+  "object": "response",
+  "output": [],
   "custom_outputs": {
-    "careplan": "...one line plan..."
+    "answer": "...one line plan...",
+    "agent_name": "agno or langchain"
   }
 }
 ```
 
 ## Version
-Version 1: minimal single-agent wrapper (no multi-agent routing, no RAG).
+Version 1: minimal multi-agent wrapper (Agno + LangGraph), Gemini only, no RAG.
