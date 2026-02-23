@@ -3,3 +3,7 @@ agno
 python-dotenv
 langgraph
 langchain-google-genai
+langchain
+opentelemetry-exporter-otlp openinference-instrumentation-agno
+fastapi
+uvicorn

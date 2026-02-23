@@ -1,5 +1,4 @@
 import os
-import sys
 
 import mlflow
 from agno.agent import Agent
@@ -12,15 +11,14 @@ mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"
 mlflow.set_experiment("agno")
 mlflow.agno.autolog()
 
-
-def load_instructions() -> str:
+def _load_instructions() -> str:
     prompt = mlflow.genai.load_prompt("prompts:/v1/1")
     return getattr(prompt, "template", str(prompt))
 
 
-def build_agent() -> Agent:
+def _build_agent(instructions: str) -> Agent:
     model = Gemini(
-        id=os.getenv("AI_GATEWAY_GEMINI_ENDPOINT", "Gemini_Endpoint"),
+        id=os.getenv("AI_GATEWAY_GEMINI_ENDPOINT", "Gemini-Endpoint"),
         api_key=os.getenv("AI_GATEWAY_API_KEY", "dummy"),
         client_params={
             "http_options": {
@@ -34,13 +32,18 @@ def build_agent() -> Agent:
     return Agent(
         name="Medical Agent",
         model=model,
-        instructions=load_instructions(),
+        instructions=instructions,
         markdown=False,
     )
 
+
+INSTRUCTIONS = _load_instructions()
+AGENT = _build_agent(INSTRUCTIONS)
+
+
 def run_agno_agent(question: str) -> str:
-    q = question.strip() or "I want to improve heart health"
-    response = build_agent().run(input=q)
+    q = question.strip()
+    response = AGENT.run(input=q)
     answer = str(getattr(response, "content", response)).strip()
     return answer
 

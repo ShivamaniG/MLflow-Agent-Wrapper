@@ -22,7 +22,7 @@ class AgentState(TypedDict):
 
 def _build_llm() -> ChatGoogleGenerativeAI:
     gateway_base = os.getenv("AI_GATEWAY_BASE_URL", "http://localhost:5000/gateway/gemini")
-    gateway_endpoint = os.getenv("AI_GATEWAY_GEMINI_ENDPOINT", "Test_Endpoint")
+    gateway_endpoint = os.getenv("AI_GATEWAY_GEMINI_ENDPOINT", "Gemini-Endpoint")
     gateway_api_key = os.getenv("AI_GATEWAY_API_KEY", "dummy")
 
     return ChatGoogleGenerativeAI(
@@ -35,7 +35,7 @@ def _build_llm() -> ChatGoogleGenerativeAI:
 
 def _careplan_node(state: AgentState) -> AgentState:
     llm = _build_llm()
-    prompt = mlflow.genai.load_prompt("prompts:/v1/2")
+    prompt = mlflow.genai.load_prompt("prompts:/v1/1")
     prompt_text = getattr(prompt, "template", str(prompt))
 
     response = llm.invoke(
@@ -57,11 +57,11 @@ workflow.add_edge("careplan", END)
 medical_graph = workflow.compile()
 
 
-def run_medical_agent(question: str) -> str:
+def run_langchain_agent(question: str) -> str:
     result = medical_graph.invoke({"question": question, "careplan": ""})
     return result["careplan"]
 
 
 if __name__ == "__main__":
     q = "Adult with fever, cough, and mild dehydration for 2 days."
-    print(run_medical_agent(q))
+    print(run_langchain_agent(q))

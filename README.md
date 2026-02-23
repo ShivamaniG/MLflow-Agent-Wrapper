@@ -20,7 +20,7 @@ Both call Gemini via MLflow AI Gateway and return one concise care-plan line.
 ## Project files
 - `agno_agent.py`: Agno medical agent logic
 - `langchain_agent.py`: LangGraph medical agent logic
-- `multi_agent.py`: single `@invoke()` router for both agents
+- `agent_router.py`: single `@invoke()` router for both agents
 - `start_server.py`: starts MLflow `AgentServer`
 - `.env`: runtime configuration
 - `.env.example`: sample configuration
@@ -61,18 +61,36 @@ Use `custom_inputs.agent_name` to choose agent.
 
 ### Call Agno agent
 ```bash
-curl -X POST http://localhost:8000/invocations   -H "Content-Type: application/json"   -d '{
-    "input": [{"role":"user","content":"I want to improve heart health"}],
-    "custom_inputs": {"agent_name":"agno"}
+curl -X POST http://localhost:8000/invocations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "ResponsesAgent",
+    "input": [],
+    "custom_inputs": {
+      "agent_id": "agno",
+      "payload": {
+        "content": "How can I improve my heart health?"
+      }
+    }
   }'
+
 ```
 
 ### Call LangGraph agent
 ```bash
-curl -X POST http://localhost:8000/invocations   -H "Content-Type: application/json"   -d '{
-    "input": [{"role":"user","content":"I want to improve heart health"}],
-    "custom_inputs": {"agent_name":"langchain"}
+curl -X POST http://localhost:8000/invocations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "ResponsesAgent",
+    "input": [],
+    "custom_inputs": {
+      "agent_id": "langchain",
+      "payload": {
+        "content": "How can I improve my heart health?"
+      }
+    }
   }'
+
 ```
 
 ## Response shape
@@ -81,8 +99,9 @@ curl -X POST http://localhost:8000/invocations   -H "Content-Type: application/j
   "object": "response",
   "output": [],
   "custom_outputs": {
-    "answer": "...one line plan...",
-    "agent_name": "agno or langchain"
+    "agent_id": "....",
+    "agent_output": "....",
+    "status":"success"
   }
 }
 ```
