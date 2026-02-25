@@ -1,46 +1,92 @@
-# MLflow Medical Agent Router
 
-## What this is
-An MLflow `ResponsesAgent` wrapper that routes incoming prompts to modular medical agents. Each agent is defined in the `agents/` package and registered via `agents.registry`. The router exposes a single `/agent/responses` endpoint backed by `mlflow.genai.AgentServer`.
+# MLflow Agent Observability Router
 
-## Why use it
-- Unified API surface for multiple medical agents (Agno, LangGraph, etc.).
-- Agents are autologged through MLflow experiments (one per agent).
-- The router validates payloads, normalizes the `agent_id`, and replies with a consistent `custom_outputs` payload.
-- New agents plug in by adding a config entry—no handler rewrites.
+This service is a modular MLflow-powered agent router designed to help teams **observe, monitor, and evaluate agent performance in a structured way**.
 
-- `agents/`: package containing agent implementations and the registry config.
-- `agents/agents.json`: declarative agent metadata (`agent_id`, module path, runner, experiment name) that `agents.registry` loads at startup.
-- `agents.registry`: loader that builds `AGENT_REGISTRY` from `agents.json`.
-- `agent_router.py`: `@invoke`-decorated handler that dispatches requests to the registered agent callable.
-- `start_server.py`: boots `mlflow.genai.AgentServer("ResponsesAgent")` on port 8000.
-- `.env(.example)`: configuration for the MLflow AI Gateway & tracking server.
-- `requirements.txt`: runtime dependencies (including `mlflow`, `agno`, `langchain-google-genai`, etc.).
+Instead of running isolated agents without visibility, this framework provides:
 
-## Environment
-Create `.env` (copy from `.env.example`) with your gateway settings:
+* Centralized agent routing
+* Prompt and response tracking
+* Experiment-level observability
+* Per-agent monitoring via MLflow
 
-```env
-AI_GATEWAY_BASE_URL=http://localhost:5000/gateway/gemini
-AI_GATEWAY_GEMINI_ENDPOINT=Gemini_Endpoint
-AI_GATEWAY_API_KEY=dummy
-MLFLOW_TRACKING_URI=http://localhost:5000
+It enables you to understand how agents behave in real time, how prompts evolve, and how outputs perform across experiments.
+
+---
+
+## The Problem We’re Solving
+
+When building LLM agents, teams often face:
+
+* No visibility into prompt behavior
+* No experiment tracking per agent
+* No structured observability
+* Difficulty debugging production responses
+* No standardized evaluation pipeline
+
+This service solves that by placing MLflow at the center of agent execution.
+
+---
+
+
+## How It Works
+
+All agents are routed through a single `ResponsesAgent` service (or can be invoked via your own API service). Regardless of how the agent is triggered, observability is centrally tracked in the MLflow server.
+
+Each agent:
+
+* Is registered declaratively
+* Runs independently
+* Logs to its own MLflow experiment
+* Supports autologging for prompts, inputs, outputs, latency, and metadata
+
+This creates a unified observability layer where every agent execution is traceable, measurable, and comparable inside MLflow.
+
+---
+
+## AI Gateway Integration
+
+Model access is abstracted through the MLflow AI Gateway. This allows you to change the underlying LLM (e.g., Gemini, OpenAI, etc.) directly from the Gateway UI without modifying agent code.
+
+Agents remain unchanged while the model configuration can be updated centrally. This enables:
+
+* Model switching without code changes
+* Centralized provider management
+* Secure API key handling
+* Consistent routing through a standard endpoint
+
+The agent logic stays stable, while model experimentation and upgrades can be managed independently through the Gateway.
+
+---
+
+## Observability with MLflow
+
+By configuring MLflow in each agent:
+
+```python
+mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"))
+mlflow.set_experiment("EXPERIMENT_NAME")
+mlflow.agno.autolog()
 ```
 
-The `AI_GATEWAY_GEMINI_ENDPOINT` must match the name registered with your gateway, and `MLFLOW_TRACKING_URI` should point to your tracking server (default `http://localhost:5000`).
+You automatically gain:
 
-## Install
-```bash
-pip install -r requirements.txt
-```
+* Prompt tracking
+* Input/output logging
+* Token usage visibility
+* Latency metrics
+* Experiment comparisons
+* Per-agent performance monitoring
 
-## Running
-1. Launch MLflow server if you rely on autologging: `mlflow server --host 127.0.0.1 --port 5000`.
-2. Start the agent router: `python start_server.py`.
-   The server runs `AgentServer("ResponsesAgent")` on `http://0.0.0.0:8000`.
+This makes agent testing measurable and production-ready.
 
-## API contract
-`POST http://localhost:8000/agent/responses` with:
+---
+
+## Agent Testing (API Contract)
+
+To test any agent:
+
+**POST** `http://localhost:8000/agent/responses`
 
 ```json
 {
@@ -55,7 +101,7 @@ pip install -r requirements.txt
 }
 ```
 
-Sample response:
+### Sample Response
 
 ```json
 {
@@ -68,13 +114,3 @@ Sample response:
   }
 }
 ```
-
-Errors set `status: "error"` in `custom_outputs` and include a `message`.
-
-## Adding agents
-1. Add the implementation module under `agents/` and expose a runner function (e.g., `run_my_agent(prompt: str) -> str`).
-2. Add a JSON entry to `agents/agents.json` with your `agent_id`, module path, runner name, and `experiment` tag.
-3. Restart `start_server.py`. The router reads `agents/agents.json`, loads each runner, and makes it available to clients via `custom_inputs.agent_id`.
-
-## Version
-Version 2: modular ResponsesAgent router with a declarative agent registry.
