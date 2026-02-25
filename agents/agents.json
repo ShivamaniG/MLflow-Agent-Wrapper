@@ -1,0 +1,14 @@
+[
+  {
+    "agent_id": "agno",
+    "module": "agents.agno_agent",
+    "runner": "run_agno_agent",
+    "experiment": "agno"
+  },
+  {
+    "agent_id": "langchain",
+    "module": "agents.langchain_agent",
+    "runner": "run_langchain_agent",
+    "experiment": "langchain"
+  }
+]

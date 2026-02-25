@@ -1,33 +1,24 @@
-# MLflow Medical Agent Wrapper - Version 1
+# MLflow Medical Agent Router
 
 ## What this is
-A minimal MLflow Agent Server wrapper with **two Gemini agents** behind one `/invocations` endpoint:
-- `agno` agent (`agno_agent.py`)
-- `langchain` (LangGraph) agent (`langchain_agent.py`)
+An MLflow `ResponsesAgent` wrapper that routes incoming prompts to modular medical agents. Each agent is defined in the `agents/` package and registered via `agents.registry`. The router exposes a single `/agent/responses` endpoint backed by `mlflow.genai.AgentServer`.
 
-Both call Gemini via MLflow AI Gateway and return one concise care-plan line.
+## Why use it
+- Unified API surface for multiple medical agents (Agno, LangGraph, etc.).
+- Agents are autologged through MLflow experiments (one per agent).
+- The router validates payloads, normalizes the `agent_id`, and replies with a consistent `custom_outputs` payload.
+- New agents plug in by adding a config entry—no handler rewrites.
 
-## Why use this
-- Single API endpoint for multiple agent frameworks
-- Gateway-based model access (no direct provider SDK calls in request layer)
-- MLflow autologging enabled for each framework:
-  - `mlflow.agno.autolog()` in Agno agent
-  - `mlflow.langchain.autolog()` in LangGraph agent
-- Separate experiments:
-  - Agno agent logs to experiment `agno`
-  - LangGraph agent logs to experiment `langchain`
+- `agents/`: package containing agent implementations and the registry config.
+- `agents/agents.json`: declarative agent metadata (`agent_id`, module path, runner, experiment name) that `agents.registry` loads at startup.
+- `agents.registry`: loader that builds `AGENT_REGISTRY` from `agents.json`.
+- `agent_router.py`: `@invoke`-decorated handler that dispatches requests to the registered agent callable.
+- `start_server.py`: boots `mlflow.genai.AgentServer("ResponsesAgent")` on port 8000.
+- `.env(.example)`: configuration for the MLflow AI Gateway & tracking server.
+- `requirements.txt`: runtime dependencies (including `mlflow`, `agno`, `langchain-google-genai`, etc.).
 
-## Project files
-- `agno_agent.py`: Agno medical agent logic
-- `langchain_agent.py`: LangGraph medical agent logic
-- `agent_router.py`: single `@invoke()` router for both agents
-- `start_server.py`: starts MLflow `AgentServer`
-- `.env`: runtime configuration
-- `.env.example`: sample configuration
-- `requirements.txt`: dependencies
-
-## Environment config
-Set `.env` (or copy from `.env.example`):
+## Environment
+Create `.env` (copy from `.env.example`) with your gateway settings:
 
 ```env
 AI_GATEWAY_BASE_URL=http://localhost:5000/gateway/gemini
@@ -36,75 +27,54 @@ AI_GATEWAY_API_KEY=dummy
 MLFLOW_TRACKING_URI=http://localhost:5000
 ```
 
-Notes:
-- `AI_GATEWAY_GEMINI_ENDPOINT` must match your MLflow Gateway endpoint name exactly.
-- `AI_GATEWAY_API_KEY=dummy` is fine if your local gateway does not enforce auth.
+The `AI_GATEWAY_GEMINI_ENDPOINT` must match the name registered with your gateway, and `MLFLOW_TRACKING_URI` should point to your tracking server (default `http://localhost:5000`).
 
 ## Install
 ```bash
 pip install -r requirements.txt
 ```
 
-## Start
-1. Start MLflow server:
-```bash
-mlflow server --host 127.0.0.1 --port 5000
-```
+## Running
+1. Launch MLflow server if you rely on autologging: `mlflow server --host 127.0.0.1 --port 5000`.
+2. Start the agent router: `python start_server.py`.
+   The server runs `AgentServer("ResponsesAgent")` on `http://0.0.0.0:8000`.
 
-2. Start agent server:
-```bash
-python start_server.py
-```
+## API contract
+`POST http://localhost:8000/agent/responses` with:
 
-## API usage
-Use `custom_inputs.agent_name` to choose agent.
-
-### Call Agno agent
-```bash
-curl -X POST http://localhost:8000/invocations \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "ResponsesAgent",
-    "input": [],
-    "custom_inputs": {
-      "agent_id": "agno",
-      "payload": {
-        "content": "How can I improve my heart health?"
-      }
+```json
+{
+  "model": "ResponsesAgent",
+  "input": [],
+  "custom_inputs": {
+    "agent_id": "langchain",
+    "payload": {
+      "content": "How can I improve my heart health?"
     }
-  }'
-
+  }
+}
 ```
 
-### Call LangGraph agent
-```bash
-curl -X POST http://localhost:8000/invocations \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "ResponsesAgent",
-    "input": [],
-    "custom_inputs": {
-      "agent_id": "langchain",
-      "payload": {
-        "content": "How can I improve my heart health?"
-      }
-    }
-  }'
+Sample response:
 
-```
-
-## Response shape
 ```json
 {
   "object": "response",
   "output": [],
   "custom_outputs": {
-    "agent_id": "....",
-    "agent_output": "....",
-    "status":"success"
+    "agent_id": "langchain",
+    "agent_output": "Incorporate daily moderate exercise and a diet rich in fruits, vegetables, and whole grains.",
+    "status": "success"
   }
 }
 ```
 
+Errors set `status: "error"` in `custom_outputs` and include a `message`.
+
+## Adding agents
+1. Add the implementation module under `agents/` and expose a runner function (e.g., `run_my_agent(prompt: str) -> str`).
+2. Add a JSON entry to `agents/agents.json` with your `agent_id`, module path, runner name, and `experiment` tag.
+3. Restart `start_server.py`. The router reads `agents/agents.json`, loads each runner, and makes it available to clients via `custom_inputs.agent_id`.
+
 ## Version
-Version 1: minimal multi-agent wrapper (Agno + LangGraph), Gemini only, no RAG.
+Version 2: modular ResponsesAgent router with a declarative agent registry.
