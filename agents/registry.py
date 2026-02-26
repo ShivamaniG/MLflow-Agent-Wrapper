@@ -11,18 +11,13 @@ CONFIG_PATH = Path(__file__).with_name("agents.json")
 @dataclass(frozen=True)
 class AgentConfig:
     agent_id: str
-    module: str
-    runner: str
     experiment: str
 
 
 def _load_configs() -> List[AgentConfig]:
     data = CONFIG_PATH.read_text()
     entries = json.loads(data)
-    configs: List[AgentConfig] = []
-    for entry in entries:
-        configs.append(AgentConfig(**entry))
-    return configs
+    return [AgentConfig(agent_id=entry["agent_id"], experiment=entry["experiment"]) for entry in entries]
 
 
 AGENT_CONFIGS: List[AgentConfig] = _load_configs()
@@ -31,10 +26,12 @@ AGENT_CONFIGS: List[AgentConfig] = _load_configs()
 def _load_agent_registry() -> Dict[str, Callable[[str], str]]:
     registry: Dict[str, Callable[[str], str]] = {}
     for agent in AGENT_CONFIGS:
-        module = import_module(agent.module)
-        runner = getattr(module, agent.runner)
+        module_name = f"agents.{agent.agent_id}_agent"
+        runner_name = f"run_{agent.agent_id}_agent"
+        module = import_module(module_name)
+        runner = getattr(module, runner_name)
         if not callable(runner):
-            raise TypeError(f"Runner '{agent.runner}' in module '{agent.module}' is not callable.")
+            raise TypeError(f"Runner '{runner_name}' in module '{module_name}' is not callable.")
         registry[agent.agent_id] = runner
     return registry
 

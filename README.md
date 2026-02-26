@@ -82,6 +82,12 @@ This makes agent testing measurable and production-ready.
 
 ---
 
+## Agent registry details
+
+- `agents/agents.json` now only holds `agent_id` + `experiment`; the loader derives the module name `agents.{agent_id}_agent` and runner `run_{agent_id}_agent` automatically.
+- Name your implementation files and runner functions accordingly (e.g., `summary_agent.py` defines `run_summary_agent`) so the registry can import them without extra metadata.
+- The router shares the same `ResponsesAgent` contract shown above; clients select agents by sending their `agent_id` in `custom_inputs`.
+
 ## Agent Testing (API Contract)
 
 To test any agent:
